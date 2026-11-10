@@ -1,0 +1,10 @@
+# Muestras de ejemplo
+# formato: <bandeja> {B|D|S} <cantidad>
+0 B 3
+1 D 2
+2 S 5
+3 B 1
+4 D 4
+0 S 2
+1 B 5
+2 D 1

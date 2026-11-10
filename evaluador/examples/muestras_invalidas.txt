@@ -1,0 +1,8 @@
+# Mezcla de lineas buenas y malas para probar los avisos de reg
+0 B 3
+4 X 2
+9 B 1
+1 D 9
+2 S
+abc
+3 s 2

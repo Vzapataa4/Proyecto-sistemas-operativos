@@ -354,6 +354,7 @@ typedef struct {
     uint64_t siguiente_id;    /* protegido por el semáforo "id" */
     int32_t  reactivo[3];     /* niveles actuales; semáforo "reactivo" */
 
+    uint32_t tam_total;       /* tamaño del segmento */
     uint32_t desp_entradas;   /* cola_t[num_entradas] */
     uint32_t desp_salida;     /* cola_t */
     uint32_t desp_tablero;    /* tablero_t */
@@ -369,8 +370,12 @@ typedef struct {
     int32_t   ocupado[3];         /* 1 si el analizador tiene una muestra */
     muestra_t actual[3];          /* la muestra que procesa cada analizador */
     int32_t   esperando_robot[3]; /* 1 si el analizador está parado sin reactivo */
+    int32_t   despachando[MAX_ENTRADAS]; /* 1 si el despachador k tiene una muestra en la mano */
+    muestra_t en_mano[MAX_ENTRADAS];     /* esa muestra */
 } tablero_t;
 ```
+
+`despachando` y `en_mano` cubren el momento en que un despachador ya sacó la muestra de su bandeja pero todavía no la puede meter en la cola interna (porque está llena o no es su turno). Sin esto, esa muestra no aparecería en ningún `list`.
 
 ### 4.4 Distribución del segmento
 
@@ -527,11 +532,11 @@ mientras activo:
     marcar en tablero: ocupado[t] = 1, actual[t] = m
     dormir(m.t_proceso / ESCALA)
     m.resultado = sortear_resultado()
-    marcar en tablero: ocupado[t] = 0
 
     wait(s.vacios)                    /* si la salida está llena, espera */
     wait(s.mutex); insertar(salida, m); post(s.mutex)
     post(s.llenos)
+    marcar en tablero: ocupado[t] = 0 /* hasta aquí se ve en "processing" */
 ```
 
 **Tiempos de procesamiento** (segundos, uniforme entre los límites):
@@ -556,7 +561,7 @@ Se toma un número entre 0 y 99: de 0 a 49 es `P`, de 50 a 84 es `N` y de 85 a 9
 
 **Consumo de reactivo:** cada muestra gasta tantas unidades como su `cantidad` (1 a 5). Como el reactivo se revisa y se descuenta dentro del mismo `wait(reactivo)`, el nivel nunca queda negativo.
 
-Cada hilo usa su propio generador aleatorio (`rand_r` con semilla propia, derivada de `EVALUATOR_SEED`), para que los hilos no compitan por un generador compartido.
+El azar de cada muestra se calcula a partir de `EVALUATOR_SEED` y del `id` de la muestra, con un generador propio (xorshift; Windows no tiene `rand_r`). Así no hay un generador compartido entre hilos, y con la misma semilla cada muestra da el mismo tiempo y el mismo resultado aunque los hilos la atiendan en otro orden.
 
 ### 6.4 Hilo robot
 
@@ -693,7 +698,7 @@ En Windows la variable de ambiente `OS` siempre vale `Windows_NT`, así que no h
 | Espera con tiempo límite en `rep -i` | `sem_timedwait` | `WaitForSingleObject` | 3.4 |
 | Terminar con `Ctrl+C` | `SIGINT` / `SIGTERM` | `SetConsoleCtrlHandler` | 6.6 |
 | Saber si el evaluador sigue vivo | `kill(pid, 0)` | `OpenProcess` + `GetExitCodeProcess` | 3.1 |
-| Generador aleatorio por hilo | `rand_r` | función propia sencilla (Windows no trae `rand_r`) | 6.3 |
+| Generador aleatorio | función propia (xorshift) | la misma | 6.3 |
 | Borrar recursos al terminar | `sem_unlink`, `shm_unlink` | se liberan solos al cerrar el último *handle* | 6.6 |
 
 En Windows, si `init` termina mal, los recursos desaparecen solos cuando se cierra el proceso. En Linux pueden quedar en `/dev/shm`; por eso `init` revisa y limpia restos de una ejecución anterior (3.1, paso 2).

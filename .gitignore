@@ -1,2 +1,3 @@
 evaluador/bin/*
 !evaluador/bin/.gitkeep
+*.spl
